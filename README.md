@@ -21,6 +21,9 @@ Vanilla Transformer is used as a baseline model.
 
 **Chat GPT**
 
+GPT-2를 사용할지 DialGPT를 사용할지는 미결.
+or you can try both
+
 <br>
 
 **Chat BERT + GPT**

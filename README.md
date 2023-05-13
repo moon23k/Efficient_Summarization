@@ -1,36 +1,11 @@
-## CPT
-The repo title **CPT** refers to a **Chatbot with Pre-Trained Models**. As the name suggests, this repo covers a series of experiments to create a chatbot with three pre-trained models. The Pre-Trained models are BERT, GPT2 and BART repectively.
-In the course of a conversation, generating the right answers is just as important as figuring out the meaning of the conversation. 
+## Sum Sparse
+
 
 <br>
 <br>
 
 ## Models
 
-**BaseLine**
-
-Vanilla Transformer is used as a baseline model.
-
-
-<br>
-
-**Chat BERT**
-
-
-<br>
-
-**Chat GPT**
-
-GPT-2를 사용할지 DialGPT를 사용할지는 미결.
-or you can try both
-
-<br>
-
-**Chat BERT + GPT**
-
-<br>
-
-**BART**
 
 <br>
 <br>

@@ -1,10 +1,11 @@
-import os, torch
+import os, math, torch
 import torch.nn as nn
 from collections import namedtuple
-from transformers import (TransformerXLModel, TransformerXLConfig, 
-                          ReformerModel, ReformerConfig, 
-                          LongformerModel, LongformerConfig 
-                          BigbirdModel, BigbirdConfig)
+from transformers import (TransfoXLConfig, TransfoXLModel, 
+                          ReformerConfig, ReformerModel, 
+                          LongformerConfig, LongformerModel, 
+                          BigBirdConfig, BigBirdModel)
+
 
 
 
@@ -72,13 +73,14 @@ class Decoder(nn.Module):
 
 def SparseModel(nn.Module):
     def __init__(self, config, encoder):
+
         self.device = config.device
         self.vocab_size = config.vocab_size
 
         self.encoder = encoder
         self.decoder = Decoder(config)
         self.dropout = nn.Dropout(config.dropout_ratio)
-        self.classifier = nn.Linear(config.hidden_dim, config.vocab_size)
+        self.generator = nn.Linear(config.hidden_dim, config.vocab_size)
 
         self.criterion = nn.CrossEntropyLoss().to(self.device)
         self.out = namedtuple('Out', 'logit loss')
@@ -89,7 +91,7 @@ def SparseModel(nn.Module):
                               attention_mask=enc_mask).last_hidden_state
 
         dec_out = self.decoder(dec_ids, memory, enc_mask, dec_mask)
-        logit = self.classifier(self.dropout(dec_out))
+        logit = self.generator(self.dropout(dec_out))
         loss = self.criterion(logit.contiguous.view(-1, self.vocab_size),
                               labels.contiguous.view(-1))
 
@@ -100,9 +102,10 @@ def SparseModel(nn.Module):
 
 def init_weights(model):    
     for name, param in model.named_parameters():
-        if any([x in name for x in ['embeddings', 'norm', 'bias']]):
+        if any([x in name for x in ['norm', 'bias']]):
             continue
         nn.init.xavier_uniform_(param)    
+
 
 
 def print_model_desc(model):
@@ -125,32 +128,56 @@ def print_model_desc(model):
     print(f"--- Model Params: {count_params(model):,}")
     print(f"--- Model  Size : {check_size(model):.3f} MB\n")
 
+
+
+
+def load_encoder(config):
+    if config.model_type == 'transformer_xl':
+        encoder_config = TransfoXLConfig(d_embed=config.emb_dim, 
+                                         d_model=config.hidden_dim, 
+                                         d_inner=config.pff_dim,
+                                         n_head=config.n_heads, 
+                                         d_head=config.n_heads,
+                                         n_layer=config.n_layers)
+
+        encoder = TransfoXLModel(encoder_config)
     
+    elif config.model_type == 'reformer':
+        encoder_config = ReformerConfig(hidden_size=config.hidden_dim, 
+                                        feed_forward_size=config.pff_dim,
+                                        num_attention_heads=config.n_heads,
+                                        num_hidden_layers=config.n_layers,
+                                        axial_pos_embds_dim=[64, 448])
+
+        encoder = ReformerModel(encoder_config)
+
+    elif config.model_type == 'longformer':
+        encoder_config = LongformerConfig(intermediate_size=config.pff_dim, 
+                                          max_position_embeddings=config.max_len,
+                                          num_attention_heads=config.n_heads, 
+                                          num_hidden_layers=config.n_layers, 
+                                          attention_window=[config.hidden_dim for _ in range(config.n_layers)])
+        encoder = LongformerModel(encoder_config)
+    
+    elif config.model_type == 'bigbird':
+        encoder_config = BigBirdConfig(hidden_size=config.hidden_dim, 
+                                       intermediate_size=config.pff_dim, 
+                                       max_position_embeddings=config.max_len,
+                                       num_attention_heads=config.n_heads, 
+                                       num_hidden_layers=config.n_layers)
+        encoder = BigBirdModel(encoder_config)        
+
+    return encoder
+
+
 
 
 def load_model(config):
-    #Load Sparse Attention Transformer Based PLM Model
-    if config.model_type == 'transformer_xl':
-        model_config = TransformerXLConfig()
-        encoder = TransformerXLModel(model_config)
-    
-    elif config.model_type == 'reformer':
-        model_config = ReformerConfig()
-        encoder = ReformerModel(model_config)
-
-    elif config.model_type == 'longformer':
-        model_config = LongformerConfig()
-        encoder = LongformerModel(model_config)
-    
-    elif config.model_type == 'bigbird':
-        model_config = BigbirdConfig()
-        encoder = BigbirdModel(model_config)        
-
+    encoder = load_encoder(config)
     model = SparseModel(config, encoder)
-
+    print(f'{config.model_type.upper()} Seq2Seq Model has Loaded')
     init_weights(model)
-    print(f'{config.strategy.upper()} Model has Loaded')
-
+    
     if config.mode != 'train':
         ckpt = config.ckpt
         assert os.path.exists(ckpt)

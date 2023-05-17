@@ -5,9 +5,10 @@ from torch.nn.utils.rnn import pad_sequence
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, tokenizer, split):
+    def __init__(self, enc_tokenizer, dec_tokenizer, split):
         super().__init__()
-        self.tokenizer = tokenizer
+        self.enc_tokenizer = enc_tokenizer
+        self.dec_tokenizer = dec_tokenizer
         self.data = self.load_data(split)
 
     @staticmethod
@@ -23,8 +24,8 @@ class Dataset(torch.utils.data.Dataset):
         text = self.data[idx]['text']
         summ = self.data[idx]['summ']
         
-        return {'text': self.tokenizer(text).input_ids,
-                'summ': self.tokenizer(summ).input_ids}
+        return {'text': self.enc_tokenizer(text).input_ids,
+                'summ': self.dec_tokenizer.EncodeAsIds(summ)}
 
 
 
@@ -46,8 +47,8 @@ class Collator(object):
         return pad_sequence(batch, batch_first=True, padding_value=self.pad_id)
 
 
-def load_dataloader(config, tokenizer, split):
-    return DataLoader(Dataset(tokenizer, split), 
+def load_dataloader(config, enc_tokenizer, dec_tokenizer, split):
+    return DataLoader(Dataset(enc_tokenizer, dec_tokenizer, split), 
                       batch_size=config.batch_size, 
                       shuffle=True if config.mode == 'train' else False, 
                       collate_fn=Collator(config.pad_id), 

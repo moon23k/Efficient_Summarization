@@ -11,7 +11,6 @@ class Trainer:
         self.model = model
         self.clip = config.clip
         self.device = config.device
-        self.strategy = config.strategy
         self.n_epochs = config.n_epochs
         self.vocab_size = config.vocab_size
 
@@ -24,17 +23,9 @@ class Trainer:
         self.train_dataloader = train_dataloader
         self.valid_dataloader = valid_dataloader
 
-        if self.strategy == 'fine':
-            self.optimizer = optim.AdamW([{'params': model.encoder.parameters(), 'lr': config.lr * 0.1},
-                                          {'params': model.decoder.parameters()},
-                                          {'params': model.generator.parameters()}], lr=config.lr)
-        elif self.strategy == 'fuse':
-            self.optimizer = optim.AdamW([{'params': model.bert.parameters(), 'lr': config.lr * 0.1},
-                                          {'params': model.encoder.parameters()},
-                                          {'params': model.decoder.parameters()},
-                                          {'params': model.generator.parameters()}], lr=config.lr)
-
-
+        self.optimizer = optim.AdamW([{'params': model.encoder.parameters(), 'lr': config.lr * 0.1},
+                                      {'params': model.decoder.parameters()},
+                                      {'params': model.generator.parameters()}], lr=config.lr)
 
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min')
         
@@ -119,11 +110,10 @@ class Trainer:
             idx += 1
 
             x = batch['text'].to(self.device) 
-            x_seg_mask = batch['text_seg'].to(self.device)
-            y = batch['labels'].to(self.device)
+            y = batch['summ'].to(self.device)
 
             with torch.autocast(device_type=self.device.type, dtype=torch.float16):
-                loss = self.model(x, x_seg_mask, y).loss
+                loss = self.model(x, y).loss
                 loss /= self.iters_to_accumulate
             
             self.scaler.scale(loss).backward()
@@ -155,11 +145,10 @@ class Trainer:
         with torch.no_grad():
             for batch in self.valid_dataloader:                
                 x = batch['text'].to(self.device) 
-                x_seg_mask = batch['text_seg'].to(self.device)
                 y = batch['labels'].to(self.device)
 
                 with torch.autocast(device_type=self.device.type, dtype=torch.float16):
-                    loss = self.model(x, x_seg_mask, y).loss
+                    loss = self.model(x, y).loss
 
                 epoch_loss += loss.item()
         

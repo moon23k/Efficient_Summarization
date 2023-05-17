@@ -1,4 +1,5 @@
 import re, os, json
+import sentencepiece as spm
 from datasets import load_dataset
 
 
@@ -6,7 +7,7 @@ from datasets import load_dataset
 #Select and Tokenize Data
 def process_data(orig_data):
 
-    processed = []
+    processed, corpus = [], []
     cnt, volumn = 0, 12000
     min_len, max_len = 1000, 3000
 
@@ -23,13 +24,33 @@ def process_data(orig_data):
         summ = re.sub(r"\s([.](?:\s|$))", r'\1', summ)  #remove whitespace in front of dot
         
         processed.append({"text": text, 'summ': summ})
+        corpus.append(summ)
 
         cnt += 1
         if cnt == volumn:
             break
 
+    with open('data/corpus.txt', 'w') as f:
+        json.dump(corpus, f)
 
     return processed
+
+
+
+def build_vocab():
+    assert os.path.exists(f'data/corpus.txt')
+    opt = f"--input=data/corpus.txt \
+            --model_prefix=data/tokenizer \
+            --vocab_size=30000 \
+            --character_coverage=1 \
+            --model_type=bpe \
+            --pad_id=0 --pad_piece=[PAD] \
+            --unk_id=1 --unk_piece=[UNK] \
+            --bos_id=2 --bos_piece=[BOS] \
+            --eos_id=3 --eos_piece=[EOS]".replace(' '*12, '')
+
+    spm.SentencePieceTrainer.Train(opt)
+    os.remove('data/corpus.txt')
 
 
 

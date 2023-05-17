@@ -6,29 +6,49 @@ Standard Attention Mechanism requirews quadratic complexity depending on the inp
 
 ## Models
 
-Transformer XL
+**Transformer XL**
 
 <br>
 
-Reformer
+**Reformer**
 
 <br>
 
-Longformer
+**Longformer**
 
 <br>
 
-Bigbird
+**Bigbird**
 
 
-<br>
-<br>
+<br><br>
+
+## Setups
+
+**common configs:** <br>
+&emsp; hidden_size = 512 <br>
+&emsp; intermediate_size = 2048 <br>
+&emsp; num_heads = 8 <br>
+&emsp; num_layers = 6 <br><br>
+
+
+| &emsp; Encoder &emsp; | &emsp; Params &emsp; | &emsp; Vocab Size &emsp; | &emsp; Tokenizer Type &emsp; |
+|       ---:       |      ---:       |      ---:     |         ---:       |
+| &emsp; **`Transformer XL`** &emsp; | &emsp; 32,404,408 &emsp; | &emsp; 267,735 &emsp;  | &emsp; Word Tokenization &emsp; |
+| &emsp; **`Reformer`** &emsp; | &emsp; 18,314,240 &emsp; | &emsp; 320 &emsp; | &emsp; Char Tokenizer &emsp; |
+| &emsp; **`Longformer`** &emsp; | &emsp; 68,535,552 &emsp; | &emsp; 30,522 &emsp; | &emsp; Sub Word Tokenization &emsp; |
+| &emsp; **`BigBird`** &emsp; | &emsp; 45,486,592 &emsp; | &emsp; 50,358 &emsp; | &emsp; Sub Word Tokenization &emsp; |
+
+<br><br>
+
 
 ## Results
 
-<br>
-<br>
+<br><br>
 
 ## Reference
-
-<br>
+&nbsp; [**Attention Is All You Need**](https://arxiv.org/abs/1706.03762) <br>
+&nbsp; [**Transformer-XL: Attentive Language Models Beyond a Fixed-Length Context**](https://arxiv.org/abs/1901.02860) <br>
+&nbsp; [**Reformer: The Efficient Transformer**](https://arxiv.org/abs/2001.04451) <br>
+&nbsp; [**Longformer: The Long-Document Transformer**](https://arxiv.org/abs/2004.05150) <br>
+&nbsp; [**Big Bird: Transformers for Longer Sequences**](https://arxiv.org/abs/2007.14062) <br>

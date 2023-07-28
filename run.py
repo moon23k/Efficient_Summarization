@@ -1,10 +1,15 @@
-import argparse, torch
-import sentencepiece as spm
+import os, yaml, argparse, torch
+
 from module.test import Tester
 from module.train import Trainer
+from module.search import Search
 from module.model import load_model
 from module.data import load_dataloader
-from transformers import set_seed, AutoTokenizer
+
+from transformers import set_seed
+from tokenizers import Tokenizer
+from tokenizers.processors import TemplateProcessing
+
 
 
 
@@ -13,12 +18,7 @@ class Config(object):
 
         self.mode = args.mode
         self.model_type = args.model
-
-        tokenizer_dict = {'transformer_xl': "transfo-xl-wt103",
-                          'reformer': "google/reformer-enwik8",
-                          'longformer': "allenai/longformer-base-4096",
-                          'bigbird': "google/bigbird-roberta-base"}
-        self.tokenizer_name = tokenizer_dict[self.model_type]
+        self.tokenizer_path = 'data/tokenizer.json'
 
         #Training args
         self.early_stop = True
@@ -56,6 +56,20 @@ class Config(object):
 
 
 
+def load_tokenizer(config):
+    assert os.path.exists(config.tokenizer_path)
+
+    tokenizer = Tokenizer.from_file(config.tokenizer_path)    
+    tokenizer.post_processor = TemplateProcessing(
+        single=f"{config.bos_token} $A {config.eos_token}",
+        special_tokens=[(config.bos_token, config.bos_id), 
+                        (config.eos_token, config.eos_id)]
+        )
+    
+    return tokenizer
+
+
+
 def inference(config, model, tokenizer):
     print('Type "quit" to terminate Summarization')
     
@@ -82,38 +96,25 @@ def inference(config, model, tokenizer):
 def main(args):
     set_seed(42)
     config = Config(args)
-    
-
-    #Load Tokenizers
-    enc_tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
-
-    dec_tokenizer = spm.SentencePieceProcessor()
-    dec_tokenizer.load(f'data/tokenizer.model')
-    dec_tokenizer.SetEncodeExtraOptions('bos:eos')    
-
-    setattr(config, 'vocab_size', dec_tokenizer.vocab_size())
-    setattr(config, 'enc_pad_id', enc_tokenizer.pad_id())
-    setattr(config, 'dec_pad_id', dec_tokenizer.pad_id())
-
-
-    #Load model
     model = load_model(config)
+    tokenizer = load_tokenizer(config)
+
 
     if config.mode == 'train': 
-        train_dataloader = load_dataloader(config, enc_tokenizer, dec_tokenizer, 'train')
-        valid_dataloader = load_dataloader(config, enc_tokenizer, dec_tokenizer, 'valid')
+        train_dataloader = load_dataloader(config, tokenizer, 'train')
+        valid_dataloader = load_dataloader(config, tokenizer, 'valid')
         trainer = Trainer(config, model, train_dataloader, valid_dataloader)
         trainer.train()
         return
 
     elif config.mode == 'test':
         test_dataloader = load_dataloader(config, 'test')
-        tester = Tester(config, model, enc_tokenizer, dec_tokenizer, test_dataloader)
+        tester = Tester(config, model, tokenizer, test_dataloader)
         tester.test()
         return
     
     elif config.mode == 'inference':
-        inference(config, model, enc_tokenizer, dec_tokenizer)
+        inference(config, model, tokenizer)
         return
     
 
@@ -121,14 +122,13 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', required=True)
-    parser.add_argument('-model', required=True)
+    parser.add_argument('-attention', required=True)
     parser.add_argument('-search', default='greedy', required=False)
     
     args = parser.parse_args()
     assert args.mode.lower() in ['train', 'test', 'inference']
-    assert args.model.lower() in ['transformer_xl','reformer', 'longformer', 'bigbird']
+    assert args.attention.lower() in ['transformer_xl','reformer', 'longformer', 'bigbird']
 
-    if args.task == 'inference':
-        assert args.search in ['greedy', 'beam']
+    assert args.search in ['greedy', 'beam']
 
     main(args)

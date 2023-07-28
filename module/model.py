@@ -49,17 +49,20 @@ class Decoder(nn.Module):
     def __init__(self, config):
         super(Decoder, self).__init__()
         
+        layer = nn.TransformerDecoderLayer(
+            d_model=config.hidden_dim,
+            nhead=config.n_heads,
+            dim_feedforward=config.pff_dim,
+            dropout=config.dropout_ratio,
+            batch_first=True, norm_first=True
+        )
+        
         self.embeddings = Embeddings(config)
-        
-        layer = nn.TransformerDecoderLayer(d_model=config.hidden_dim,
-                                           nhead=config.n_heads,
-                                           dim_feedforward=config.pff_dim,
-                                           dropout=config.dropout_ratio,
-                                           batch_first=True, norm_first=True)
-        
-        self.decoder = nn.TransformerDecoder(decoder_layer=layer, 
-                                             num_layers=config.n_layers,
-                                             norm=nn.LayerNorm(config.hidden_dim))
+        self.decoder = nn.TransformerDecoder(
+            decoder_layer=layer, 
+            num_layers=config.n_layers,
+            norm=nn.LayerNorm(config.hidden_dim)
+        )
         
 
     def forward(self, x, memory, x_sub_mask, x_pad_mask, m_pad_mask):
@@ -133,38 +136,46 @@ def print_model_desc(model):
 
 def load_encoder(config):
     if config.model_type == 'transformer_xl':
-        encoder_config = TransfoXLConfig(d_embed=config.emb_dim, 
-                                         d_model=config.hidden_dim, 
-                                         d_inner=config.pff_dim,
-                                         n_head=config.n_heads, 
-                                         d_head=config.n_heads,
-                                         n_layer=config.n_layers)
+        encoder_config = TransfoXLConfig(
+            d_embed=config.emb_dim, 
+            d_model=config.hidden_dim, 
+            d_inner=config.pff_dim,
+            n_head=config.n_heads, 
+            d_head=config.n_heads,
+            n_layer=config.n_layers
+        )
 
         encoder = TransfoXLModel(encoder_config)
     
     elif config.model_type == 'reformer':
-        encoder_config = ReformerConfig(hidden_size=config.hidden_dim, 
-                                        feed_forward_size=config.pff_dim,
-                                        num_attention_heads=config.n_heads,
-                                        num_hidden_layers=config.n_layers,
-                                        axial_pos_embds_dim=[64, 448])
+        encoder_config = ReformerConfig(
+            hidden_size=config.hidden_dim, 
+            feed_forward_size=config.pff_dim,
+            num_attention_heads=config.n_heads,
+            num_hidden_layers=config.n_layers,
+            axial_pos_embds_dim=[64, 448]
+        )
 
         encoder = ReformerModel(encoder_config)
 
     elif config.model_type == 'longformer':
-        encoder_config = LongformerConfig(intermediate_size=config.pff_dim, 
-                                          max_position_embeddings=config.max_len,
-                                          num_attention_heads=config.n_heads, 
-                                          num_hidden_layers=config.n_layers, 
-                                          attention_window=[config.hidden_dim for _ in range(config.n_layers)])
+        encoder_config = LongformerConfig(
+            intermediate_size=config.pff_dim, 
+            max_position_embeddings=config.max_len,
+            num_attention_heads=config.n_heads, 
+            num_hidden_layers=config.n_layers, 
+            attention_window=[config.hidden_dim for _ in range(config.n_layers)]
+        )
         encoder = LongformerModel(encoder_config)
     
     elif config.model_type == 'bigbird':
-        encoder_config = BigBirdConfig(hidden_size=config.hidden_dim, 
-                                       intermediate_size=config.pff_dim, 
-                                       max_position_embeddings=config.max_len,
-                                       num_attention_heads=config.n_heads, 
-                                       num_hidden_layers=config.n_layers)
+        encoder_config = BigBirdConfig(
+            hidden_size=config.hidden_dim, 
+            intermediate_size=config.pff_dim, 
+            max_position_embeddings=config.max_len,
+            num_attention_heads=config.n_heads, 
+            num_hidden_layers=config.n_layers
+        )
         encoder = BigBirdModel(encoder_config)        
 
     return encoder

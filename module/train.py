@@ -4,6 +4,7 @@ import torch.optim as optim
 
 
 
+
 class Trainer:
     def __init__(self, config, model, train_dataloader, valid_dataloader):
         super(Trainer, self).__init__()
@@ -145,7 +146,7 @@ class Trainer:
         with torch.no_grad():
             for batch in self.valid_dataloader:                
                 x = batch['text'].to(self.device) 
-                y = batch['labels'].to(self.device)
+                y = batch['summ'].to(self.device)
 
                 with torch.autocast(device_type=self.device.type, dtype=torch.float16):
                     loss = self.model(x, y).loss

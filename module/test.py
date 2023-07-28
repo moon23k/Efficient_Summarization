@@ -1,4 +1,4 @@
-import math, time, torch, evaluate
+import math, torch, evaluate
 import torch.nn as nn
 
 
@@ -12,14 +12,6 @@ class Tester:
         self.device = config.device
         self.dataloader = test_dataloader
         self.metric_module = evaluate.load('rouge')
-
-
-    @staticmethod
-    def measure_time(start_time, end_time):
-        elapsed_time = end_time - start_time
-        elapsed_min = int(elapsed_time / 60)
-        elapsed_sec = int(elapsed_time - (elapsed_min * 60))
-        return f"{elapsed_min}m {elapsed_sec}s"    
 
 
     def test(self):

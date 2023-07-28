@@ -5,10 +5,9 @@ from torch.nn.utils.rnn import pad_sequence
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, enc_tokenizer, dec_tokenizer, split):
+    def __init__(self, tokenizer, split):
         super().__init__()
-        self.enc_tokenizer = enc_tokenizer
-        self.dec_tokenizer = dec_tokenizer
+        self.tokenizer = tokenizer
         self.data = self.load_data(split)
 
     @staticmethod
@@ -24,8 +23,8 @@ class Dataset(torch.utils.data.Dataset):
         text = self.data[idx]['text']
         summ = self.data[idx]['summ']
         
-        return {'text': self.enc_tokenizer(text).input_ids,
-                'summ': self.dec_tokenizer.EncodeAsIds(summ)}
+        return {'text': self.tokenizer(text).ids,
+                'summ': self.tokenizer(summ).ids}
 
 
 
@@ -34,11 +33,7 @@ class Collator(object):
         self.pad_id = pad_id
 
     def __call__(self, batch):
-        text_batch, summ_batch = [], []
-        
-        for elem in batch:
-            text_batch.append(torch.LongTensor(elem['text']))
-            summ_batch.append(torch.LongTensor(elem['summ']))
+        text_batch, summ_batch = zip(*batch)
 
         return {'text': self.pad_batch(text_batch),
                 'summ': self.pad_batch(summ_batch)}
@@ -47,10 +42,12 @@ class Collator(object):
         return pad_sequence(batch, batch_first=True, padding_value=self.pad_id)
 
 
-def load_dataloader(config, enc_tokenizer, dec_tokenizer, split):
-    return DataLoader(Dataset(enc_tokenizer, dec_tokenizer, split), 
-                      batch_size=config.batch_size, 
-                      shuffle=True if config.mode == 'train' else False, 
-                      collate_fn=Collator(config.pad_id), 
-                      num_workers=2)
+def load_dataloader(config, tokenizer, split):
+    return DataLoader(
+        Dataset(tokenizer, split), 
+        batch_size=config.batch_size if split=='train' else 1, 
+        shuffle=True if split == 'train' else False, 
+        collate_fn=Collator(config.pad_id), 
+        num_workers=2
+    )
     

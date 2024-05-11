@@ -20,11 +20,11 @@ class Dataset(torch.utils.data.Dataset):
         return len(self.data)
     
     def __getitem__(self, idx):
-        text = self.data[idx]['text']
-        summ = self.data[idx]['summ']
+        x = self.data[idx]['x']
+        y = self.data[idx]['y']
         
-        return {'text': self.tokenizer(text).ids,
-                'summ': self.tokenizer(summ).ids}
+        return {'x': self.tokenizer(x).ids,
+                'y': self.tokenizer(y).ids}
 
 
 
@@ -33,10 +33,10 @@ class Collator(object):
         self.pad_id = pad_id
 
     def __call__(self, batch):
-        text_batch, summ_batch = zip(*batch)
+        x_batch, y_batch = zip(*batch)
 
-        return {'text': self.pad_batch(text_batch),
-                'summ': self.pad_batch(summ_batch)}
+        return {'x': self.pad_batch(x_batch),
+                'y': self.pad_batch(y_batch)}
 
     def pad_batch(self, batch):
         return pad_sequence(batch, batch_first=True, padding_value=self.pad_id)

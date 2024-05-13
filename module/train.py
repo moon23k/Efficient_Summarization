@@ -24,14 +24,11 @@ class Trainer:
         self.train_dataloader = train_dataloader
         self.valid_dataloader = valid_dataloader
 
-        self.optimizer = optim.AdamW([{'params': model.encoder.parameters(), 'lr': config.lr * 0.1},
-                                      {'params': model.decoder.parameters()},
-                                      {'params': model.generator.parameters()}], lr=config.lr)
-
-        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min')
+        self.optimizer = AdamW(self.model.parameters(), lr=config.lr)
+        self.lr_scheduler = ReduceLROnPlateau(self.optimizer, patience=2)
         
         self.ckpt_path = config.ckpt_path
-        self.record_path = f"ckpt/{self.strategy}.json"
+        self.record_path = f"ckpt/{self.mname}.json"
         self.record_keys = ['epoch', 'train_loss', 'train_ppl', 'valid_loss', 
                             'valid_ppl', 'learning_rate', 'train_time']
 
@@ -110,11 +107,9 @@ class Trainer:
         for idx, batch in enumerate(self.train_dataloader):
             idx += 1
 
-            x = batch['text'].to(self.device) 
-            y = batch['summ'].to(self.device)
-
+            batch = {k: v.to(self.device) for k, v in batch.items()}
             with torch.autocast(device_type=self.device.type, dtype=torch.float16):
-                loss = self.model(x, y).loss
+                loss = self.model(**batch).loss
                 loss /= self.iters_to_accumulate
             
             self.scaler.scale(loss).backward()
@@ -144,12 +139,11 @@ class Trainer:
         tot_len = len(self.valid_dataloader)
         
         with torch.no_grad():
-            for batch in self.valid_dataloader:                
-                x = batch['text'].to(self.device) 
-                y = batch['summ'].to(self.device)
+            for batch in self.valid_dataloader:
+                batch = {k: v.to(self.device) for k, v in batch.items()}
 
                 with torch.autocast(device_type=self.device.type, dtype=torch.float16):
-                    loss = self.model(x, y).loss
+                    loss = self.model(**batch).loss
 
                 epoch_loss += loss.item()
         

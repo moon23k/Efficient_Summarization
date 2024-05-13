@@ -1,1 +1,2 @@
-from .transformer import Transformer
+from .standard_transformer import StandardTransformer
+from .evolved_transformer import EvolvedTransformer

@@ -1,6 +1,6 @@
 import os, torch
 import torch.nn as nn
-from model import Transformer
+from model import StandardTransformer, EvovedTransformer
 
 
 
@@ -38,9 +38,16 @@ def print_model_desc(model):
 
 
 def load_model(config):
-    model = Transformer(config)
-    print(f'Transformer with {config.attention.upper()} Attention has Loaded')
+
+    if config.arch == 'standard':
+        model = StandardTransformer(config)
+    else:
+        model = EvovedTransformer(config)
+
+
+    print(f'{config.mname.upper()} Model has Loaded')
     init_weights(model)
+
     
     if config.mode != 'train':
         ckpt = config.ckpt
@@ -48,6 +55,7 @@ def load_model(config):
         model_state = torch.load(ckpt, map_location=config.device)['model_state_dict']
         model.load_state_dict(model_state)
         print(f"Model States has loaded from {ckpt}")
+
 
     print_model_desc(model)
     return model.to(config.device)

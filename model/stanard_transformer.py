@@ -27,21 +27,6 @@ class EncoderLayer(nn.Module):
 
 
 
-class DecoderLayer(nn.Module):
-    def __init__(self, config):
-        super(DecoderLayer, self).__init__()
-        self.self_attn = MultiHeadAttention(config)
-        self.src_attn = MultiHeadAttention(config)
-        self.pff = PositionwiseFeedForward(config)
-        self.sublayer = clones(SublayerConnection(config), 3)
-
-    def forward(self, x, m, e_mask, d_mask):
-        x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, d_mask))
-        x = self.sublayer[1](x, lambda x: self.src_attn(x, m, m, e_mask))
-        return self.sublayer[2](x, self.pff)
-
-
-
 
 class Encoder(nn.Module):
     def __init__(self, config):
@@ -59,26 +44,10 @@ class Encoder(nn.Module):
 
 
 
-class Decoder(nn.Module):
+
+class StandardTransformer(nn.Module):
     def __init__(self, config):
-        super(Decoder, self).__init__()
-
-        self.embeddings = Embeddings(config)        
-        layer = DecoderLayer(config)
-        self.layers = clones(layer, config.n_layers)
-
-
-    def forward(self, x, m, e_mask, d_mask):
-        x = self.embeddings(x)
-        for layer in self.layers:
-            x = layer(x, m, e_mask, d_mask)
-        return x
-
-
-
-class ScratchModel(nn.Module):
-    def __init__(self, config):
-        super(ScratchModel, self).__init__()
+        super(StandardTransformer, self).__init__()
 
         self.pad_id = config.pad_id
         self.device = config.device

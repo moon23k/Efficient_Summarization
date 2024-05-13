@@ -38,16 +38,15 @@ class Config(object):
                     setattr(self, key, val)
 
         self.mode = args.mode
-        self.model_type = args.model
+        self.arch = args.arch
+        self.attn = args.attn
+        self.mname = args.mname
         self.search_method = args.search
-
-        self.ckpt = f"ckpt/{self.model_type}_model.pt"
-        self.tokenizer_path = f'data/tokenizer.json'
+        self.ckpt = f'ckpt/{args.mname}_model.pt'
 
         use_cuda = torch.cuda.is_available()
-        self.device_type = 'cuda' \
-                           if use_cuda and self.mode != 'inference' \
-                           else 'cpu'
+        device_condition = use_cuda and self.mode != 'inference'
+        self.device_type = 'cuda' if device_condition else 'cpu'
         self.device = torch.device(self.device_type)
 
 
@@ -105,10 +104,12 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     assert args.mode in ['train', 'test', 'inference']
-    assert args.model in ['std', 'half', 'linear']
+    assert args.arch in ['standard', 'evolved']
+    assert args.attn in ['orig', 'lin_half', 'nolin_half', 'lin_full', 'nolin_full']
     assert args.search in ['greedy', 'beam']
 
     if args.mode != 'train':
-        assert os.path.exists(f'ckpt/{args.model}_model.pt')
+        args.mname = f"{args.arch}_{args.attn}" if args.attn != 'orig'  else args.arch
+        assert os.path.exists(f'ckpt/{args.mname}_model.pt')
 
     main(args)

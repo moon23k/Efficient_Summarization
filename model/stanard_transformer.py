@@ -6,7 +6,8 @@ from .components import (
     Embeddings, 
     SublayerConnection,
     MultiHeadAttention, 
-    PositionwiseFeedForward
+    PositionwiseFeedForward, 
+    Decoder
 )
 
 
@@ -20,8 +21,8 @@ class EncoderLayer(nn.Module):
         self.sublayer = clones(SublayerConnection(config), 2)
 
 
-    def forward(self, x, mask):
-        x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask))
+    def forward(self, x, mask, apply_proj=False):
+        x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask, apply_proj))
         return self.sublayer[1](x, self.pff)
 
 
@@ -32,14 +33,30 @@ class Encoder(nn.Module):
     def __init__(self, config):
         super(Encoder, self).__init__()        
 
+        self.attn = config.attn
+        self.n_layers = config.n_layers
         self.embeddings = Embeddings(config)
         layer = EncoderLayer(config)
         self.layers = clones(layer, config.n_layers)
 
+
     def forward(self, x, e_mask):
         x = self.embeddings(x)
-        for layer in self.layers:
-            x = layer(x, e_mask)
+
+        if self.attn == 'orig':
+            for layer in self.layers:
+                x = layer(x, e_mask)
+        else:
+            if 'half' in self.attn:
+                for idx, layer in enumerate(self.layers):
+                    if (idx + 1) // 2 >= self.n_layers // 2:
+                        x = layer(x, e_mask, apply_proj=True)
+                    else:
+                        x = layer(x, e_mask, apply_proj=False)                
+            else:
+                for layer in self.layers:
+                    x = layer(x, e_mask, apply_proj=True)
+
         return x
 
 

@@ -42,7 +42,7 @@ class Config(object):
         self.attn = args.attn
         self.mname = args.mname
         self.search_method = args.search
-        self.ckpt = f'ckpt/{args.mname}_model.pt'
+        self.ckpt = f'ckpt/{self.mname}_model.pt'
 
         use_cuda = torch.cuda.is_available()
         device_condition = use_cuda and self.mode != 'inference'

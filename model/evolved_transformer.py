@@ -3,7 +3,12 @@ import torch.nn as nn
 import torch.nn.init as init
 from torch.nn import functional as F
 from collections import namedtuple
-from .components import clones, Embeddings, Decoder
+from .components import (
+    clones, 
+    Embeddings, 
+    Decoder, 
+    MultiHeadAttention
+)
 
 
 
@@ -63,10 +68,7 @@ class EncoderCell(nn.Module):
 
         self.pad_id = config.pad_id
         self.glu = GatedConvolution(config.hidden_dim)
-        
-        self.attention = nn.MultiheadAttention(
-            config.hidden_dim, config.n_heads, batch_first=True
-        )
+        self.attention = MultiHeadAttention(config)
 
         self.mid_layer_norm = nn.LayerNorm(config.pff_dim)
         self.layer_norms = clones(nn.LayerNorm(config.hidden_dim), 4)
@@ -96,7 +98,7 @@ class EncoderCell(nn.Module):
         )
 
 
-    def forward(self, x, e_mask):
+    def forward(self, x, e_mask, apply_proj=False):
         ### Block_01
         B01_out = self.glu(self.layer_norms[0](x)) #Dim:512
 
@@ -137,9 +139,8 @@ class EncoderCell(nn.Module):
         
         attention_out = self.attention(
             B04_out, B04_out, B04_out,
-            key_padding_mask = e_mask,
-            need_weights=False
-        )[0]
+            mask = e_mask, apply_proj=apply_proj
+        )
         
         B04_out += attention_out #Dim:512
 
@@ -152,160 +153,33 @@ class EncoderCell(nn.Module):
 
 
 
-class DecoderCell(nn.Module):
-    def __init__(self, config):
-        super(DecoderCell, self).__init__()
-        
-        self.pad_id = config.pad_id
-        self.dropout = nn.Dropout(config.dropout_ratio)
-
-        self.attention = nn.MultiheadAttention(
-            config.hidden_dim, config.n_heads
-        )
-
-        self.mid_layer_norm = nn.LayerNorm(config.hidden_dim * 2)
-        
-        self.layer_norms = clones(nn.LayerNorm(config.hidden_dim), 5)
-
-        self.left_attn = nn.MultiheadAttention(
-            config.hidden_dim, config.n_heads * 2, batch_first=True
-        )
-
-        self.right_attn = nn.MultiheadAttention(
-            config.hidden_dim, config.n_heads, batch_first=True
-        )
-
-        self.left_net = nn.Sequential(
-            SeparableConv1D(config.hidden_dim, config.hidden_dim * 2, 11), 
-            nn.ReLU()
-        )
-        
-        self.right_net = SeparableConv1D(
-            config.hidden_dim, config.hidden_dim // 2, 7
-        )
-        
-        self.sep_conv = SeparableConv1D(
-            config.hidden_dim * 2, config.hidden_dim, 7
-        )
-
-
-        self.self_attn = nn.MultiheadAttention(
-            config.hidden_dim, config.n_heads * 2, batch_first=True
-        )
-
-        self.src_attn = nn.MultiheadAttention(
-            config.hidden_dim, config.n_heads, batch_first=True
-        )
-
-        self.pff = nn.Sequential(
-            nn.Linear(config.hidden_dim, config.pff_dim),
-            nn.ReLU(),
-            nn.Linear(config.pff_dim, config.hidden_dim)
-        )
-
-
-
-    def forward(self, x, memory, e_mask, d_mask):
-
-        ### Block_01
-        B01_out = self.layer_norms[0](x)
-
-        left_out = self.left_attn(
-            B01_out, B01_out, B01_out,
-            attn_mask=d_mask,
-            need_weights=False
-        )[0]
-
-        right_out = self.right_attn(
-            B01_out, B01_out, B01_out,
-            attn_mask=d_mask,
-            need_weights=False
-        )[0]
-
-        B01_out = left_out + right_out
-
-
-        ### Block_02
-        B02_out = self.layer_norms[1](B01_out)
-        left_out = self.left_net(B02_out.transpose(1, 2)).transpose(1, 2)
-        right_out = self.right_net(B02_out.transpose(1, 2)).transpose(1, 2)
-
-        right_out = F.pad(
-            input=right_out, 
-            pad=(0, left_out.size(-1) - right_out.size(-1), 0,0,0,0), 
-            mode='constant', value=self.pad_id
-        ) #Dim:1024
-                             
-        B02_out = left_out + right_out #Dim: 1024
-
-        ### Block_03
-        B03_out = self.mid_layer_norm(B02_out)
-        B03_out = self.sep_conv(B03_out.transpose(1, 2)).transpose(1, 2)
-        B03_out += B01_out
-
-
-        ### Block_04
-        B04_out = self.layer_norms[2](B03_out)
-        
-        B04_out = self.self_attn(
-            B04_out, B04_out, B04_out,
-            attn_mask=d_mask,
-            need_weights=False
-        )[0]
-
-        B04_out += B03_out
-
-
-        ### Block_05
-        B05_out = self.layer_norms[3](B04_out)
-        
-        B05_out = self.src_attn(
-            B05_out, memory, memory,
-            key_padding_mask=e_mask,
-            need_weights=False
-        )[0]
-
-        B05_out += B04_out        
-
-
-        ### Block_06 & Block_07
-        out = self.layer_norms[4](B05_out)
-        out = self.pff(out) + B05_out #Dim:512
-
-        return out
-
-
-
-
 class EvolvedEncoder(nn.Module):
     def __init__(self, config):
         super(EvolvedEncoder, self).__init__()
 
+        self.attn = config.attn
+        self.n_cells = config.n_layers//2
+
         self.embeddings = Embeddings(config)
-        self.cells = clones(EncoderCell(config), config.n_layers//2)
+        self.cells = clones(EncoderCell(config), self.n_cells)
 
 
     def forward(self, x, e_mask):
         x = self.embeddings(x)
-        for cell in self.cells:
-            x = cell(x, e_mask)
-        return x
 
-
-
-
-class EvolvedDecoder(nn.Module):
-    def __init__(self, config):
-        super(EvolvedDecoder, self).__init__()
-
-        self.embeddings = Embeddings(config)
-        self.cells = clones(DecoderCell(config), config.n_layers//2)
-
-
-    def forward(self, x, memory, e_mask, d_mask):
-        x = self.embeddings(x)
-        for cell in self.cells:
-            x = cell(x, memory, e_mask, d_mask)
+        if self.attn == 'orig':
+            for cell in self.cells:
+                x = cell(x, e_mask)
+        else:
+            if 'half' in self.attn:
+                for idx, cell in enumerate(self.cells):
+                    if (idx + 1) // 2 >= self.n_cells // 2:
+                        x = cell(x, e_mask, apply_proj=True)
+                    else:
+                        x = cell(x, e_mask, apply_proj=False)                
+            else:
+                for cell in self.cells:
+                    x = cell(x, e_mask, apply_proj=True)
 
         return x
 
@@ -321,12 +195,7 @@ class EvolvedTransformer(nn.Module):
         self.vocab_size = config.vocab_size
 
         self.encoder = EvolvedEncoder(config)
-
-        if config.model_type == 'evolved':
-            self.decoder = EvolvedDecoder(config)
-        elif config.model_type == 'evolved_hybrid':
-            self.decoder = StandardDecoder(config)
-
+        self.decoder = Decoder(config)
         self.generator = nn.Linear(config.hidden_dim, config.vocab_size)
 
         self.criterion = nn.CrossEntropyLoss()

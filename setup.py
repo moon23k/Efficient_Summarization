@@ -11,10 +11,9 @@ from tokenizers.normalizers import NFD, Lowercase, StripAccents
 
 
 
-def select_data(data_volumn):
-    volumn_cnt = 0
+def select_data():
     corpus, selected = [], []
-    min_len, max_len = 500, 2300
+    min_len, max_len = 1000, 2500
 
     #Load Original Dataset
     cnn_data = load_dataset('cnn_dailymail', '3.0.0')
@@ -37,11 +36,6 @@ def select_data(data_volumn):
                     selected.append({'x': x, 'y': y})
                     corpus.append(x)
                     corpus.append(y)
-
-                    #End Condition
-                    volumn_cnt += 1
-            if volumn_cnt == data_volumn:
-                break
 
     with open('data/corpus.txt', 'w') as f:
         f.write('\n'.join(corpus))
@@ -69,18 +63,8 @@ def train_tokenizer(config):
 
     #Train and Save Tokenizer
     tokenizer.train(files=[corpus_path], trainer=trainer)
-    tokenizer_path = "data/tokenizer.json"
-    tokenizer.save(tokenizer_path)
+    tokenizer.save(config['tokenizer_path'])
 
-    #Load Trained Tokenizer
-    tokenizer = Tokenizer.from_file(tokenizer_path)
-    tokenizer.post_processor = TemplateProcessing(
-        single=f"{config['bos_token']} $A {config['eos_token']}",
-        special_tokens=[(config['bos_token'], config['bos_id']), 
-                        (config['eos_token'], config['eos_id'])]
-        )
-
-    return tokenizer
 
 
 
@@ -98,40 +82,37 @@ def save_data(data_obj):
 
 
 
-def process_data(tokenizer, selected_data):
-    processed = []
-    max_seq_len = 0
-
+def tokenize_data(config, selected_data):
+    #Load Trained Tokenizer    
+    tokenizer = Tokenizer.from_file(config['tokenizer_path'])
+    tokenizer.post_processor = TemplateProcessing(
+        single=f"{config['bos_token']} $A {config['eos_token']}",
+        special_tokens=[(config['bos_token'], config['bos_id']), 
+                        (config['eos_token'], config['eos_id'])]
+        )
+    
+    #Tokenize
+    tokenized = []
     for elem in selected_data:
-        x = tokenizer(elem['x']).ids
-        y = tokenizer(elem['y']).ids
+        x = tokenizer.encode(elem['x']).ids
+        y = tokenizer.encode(elem['y']).ids
 
-        processed.append({'x': x, 'y': y})
+        if config['min_tok_len'] < len(x) < config['max_tok_len']:
+            tokenized.append({'x': x, 'y': y})
 
-        seq_len = len(x)
-        if max_seq_len < seq_len:
-            max_seq_len = seq_len
-
-
-    return processed, max_seq_len
+    return tokenized
 
 
 
 
 def main():
     with open("config.yaml", "r") as f:
-        data_config = yaml.safe_load(f)['tokenizer']
+        tok_config = yaml.safe_load(f)['tokenizer']
 
-    selected_data = select_data(data_config['data_volumn'])
-    tokenizer = train_tokenizer(data_config)
-    processed_data, max_seq_len = process_data(tokenizer, selected_data)
+    selected_data = select_data()
+    tokenizer = train_tokenizer(tok_config)
+    processed_data = tokenize_data(tok_config, selected_data)
     save_data(processed_data)
-
-
-    #Updata data configuration
-    data_config.max_seq_len = max_seq_len
-    with open("config.yaml", "w") as f:
-        yaml.safe_dump(data_config, f)
 
 
 

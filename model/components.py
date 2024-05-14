@@ -1,7 +1,8 @@
 import torch, copy, math
 import torch.nn as nn
 import torch.nn.functional as F
-from collections import namedtuple\
+from collections import namedtuple
+
 
 
 
@@ -20,19 +21,29 @@ class MultiHeadAttention(nn.Module):
 
         assert hidden_dim // self.n_heads
         self.head_dim = hidden_dim // self.n_heads
-        
+
         self.linears = clones(nn.Linear(hidden_dim, hidden_dim), 4)
         self.dropout = nn.Dropout(config.dropout_ratio)
         self.scale = torch.sqrt(torch.FloatTensor([self.head_dim])).to(config.device)
 
+        self.attn = config.attn
+        if self.attn != 'orig':
+            proj = [
+                nn.Linear(config.full_len, config.full_len // 2),
+                nn.Dropout(config.dropout_ratio)
+            ]
+            if 'nolin' in self.attn:
+                proj.insert(1, nn.GELU())
 
-    def forward(self, query, key, value, mask = None):
+            self.projs = clones(nn.Sequential(*proj), 2)
 
+
+    def std_forward(self, query, key, value, mask=None):
         orig_shape = list(query.shape)
         split_shape = [query.size(0), -1, self.n_heads, self.head_dim]
 
         Q, K, V = [lin(x).view(split_shape).transpose(1, 2) \
-                   for lin, x in zip(self.linears, (query, key, value))]   
+                   for lin, x in zip(self.linears, (query, key, value))]
 
         score = torch.matmul(Q, K.permute(0, 1, 3, 2)) / self.scale
 
@@ -42,13 +53,47 @@ class MultiHeadAttention(nn.Module):
         attention = torch.softmax(score, dim=-1)
 
         x = torch.matmul(self.dropout(attention), V)
-        
+
         x = x.permute(0, 2, 1, 3).contiguous()
         x = x.view(orig_shape)
 
         del Q, K, V
 
         return self.linears[-1](x)
+
+
+    def lin_forward(self, query, key, value, mask=None):
+
+        orig_shape = list(query.shape)
+        split_shape = [query.size(0), -1, self.n_heads, self.head_dim]
+        Q, K, V = [lin(x).view(split_shape).transpose(1, 2) \
+                   for lin, x in zip(self.linears, (query, key, value))]
+        
+        if mask is not None:
+            mask_fn = lambda x: x.transpose(2, 3).masked_fill(mask == 0, 0.0).transpose(2, 3)
+            Q, K, V = map(mask_fn, (Q, K, V))
+
+        K, V = [proj(x).transpose(2, 3) for proj, x in \
+                zip(self.projs, (K.transpose(2, 3), V.transpose(2, 3)))]
+
+        score = torch.matmul(Q, K.permute(0, 1, 3, 2)) / self.scale
+        attention = torch.softmax(score, dim=-1)
+
+        x = torch.matmul(self.dropout(attention), V)
+
+        x = x.permute(0, 2, 1, 3).contiguous()
+        x = x.view(orig_shape)
+
+        del Q, K, V
+
+        return self.linears[-1](x)
+
+
+    def forward(self, query, key, value, mask=None, apply_proj=False):
+        if apply_proj:
+            return self.lin_forward(query, key, value, mask)
+        else:
+            return self.std_forward(query, key, value, mask)
         
 
 
@@ -57,7 +102,7 @@ class PositionalEncoding(nn.Module):
     def __init__(self, config):
         super(PositionalEncoding, self).__init__()
         
-        max_len = config.max_len if config.task != 'summarization' else config.max_len * 4
+        max_len = config.full_len
         pe = torch.zeros(max_len, config.emb_dim)
         
         position = torch.arange(0, max_len).unsqueeze(1)
@@ -129,6 +174,7 @@ class SublayerConnection(nn.Module):
 
 
 
+
 class DecoderLayer(nn.Module):
     def __init__(self, config):
         super(DecoderLayer, self).__init__()
@@ -141,6 +187,7 @@ class DecoderLayer(nn.Module):
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, d_mask))
         x = self.sublayer[1](x, lambda x: self.src_attn(x, m, m, e_mask))
         return self.sublayer[2](x, self.pff)
+
 
 
 

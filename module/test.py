@@ -1,5 +1,6 @@
-import math, torch, evaluate
+import torch, evaluate
 import torch.nn as nn
+
 
 
 
@@ -35,11 +36,8 @@ class Tester:
 
 
     def metric_score(self, pred, label):
-
         pred = self.tokenizer.batch_decode(pred)
         label = self.tokenizer.batch_decode(label.tolist())
-
-        #For Translation and Summarization Tasks
         score = self.metric_module.compute(pred, label)['rouge2']
 
         return (score * 100)

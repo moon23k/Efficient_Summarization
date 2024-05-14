@@ -42,7 +42,7 @@ def load_model(config):
     if config.arch == 'standard':
         model = StandardTransformer(config)
     else:
-        model = EvovedTransformer(config)
+        model = EvolvedTransformer(config)
 
 
     print(f'{config.mname.upper()} Model has Loaded')

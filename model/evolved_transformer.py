@@ -136,7 +136,6 @@ class EncoderCell(nn.Module):
 
         ### Block_04
         B04_out = self.layer_norms[2](B03_out)
-        
         attention_out = self.attention(
             B04_out, B04_out, B04_out,
             mask = e_mask, apply_proj=apply_proj
@@ -202,17 +201,20 @@ class EvolvedTransformer(nn.Module):
         self.out = namedtuple('Out', 'logit loss')
 
 
-    @staticmethod    
-    def shift_y(x):
-        return x[:, :-1], x[:, 1:]    
-
-
     def pad_mask(self, x):
-        return x == self.pad_id
+        return (x != self.pad_id).unsqueeze(1).unsqueeze(2)
+
 
     def dec_mask(self, x):
         sz = x.size(1)
-        return torch.triu(torch.full((sz, sz), float('-inf')), diagonal=1).to(self.device)
+        pad_mask = self.pad_mask(x)
+        sub_mask = torch.tril(torch.ones((sz, sz), device=self.device)).bool()
+        return pad_mask & sub_mask
+
+
+    @staticmethod
+    def shift_y(x):
+        return x[:, :-1], x[:, 1:]
 
 
     def forward(self, x, y):
@@ -223,7 +225,6 @@ class EvolvedTransformer(nn.Module):
 
         memory = self.encoder(x, e_mask)
         dec_out = self.decoder(y, memory, e_mask, d_mask)
-
         logit = self.generator(dec_out)
         
         #Getting Outputs

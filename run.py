@@ -30,7 +30,7 @@ def set_seed(SEED=42):
 
 class Config(object):
     def __init__(self, args):    
-
+        
         with open('config.yaml', 'r') as f:
             params = yaml.load(f, Loader=yaml.FullLoader)
             for group in params.keys():
@@ -40,8 +40,8 @@ class Config(object):
         self.mode = args.mode
         self.arch = args.arch
         self.attn = args.attn
-        self.mname = args.mname
         self.search_method = args.search
+        self.mname = f"{args.arch}_{args.attn}" if args.attn != 'orig'  else args.arch
         self.ckpt = f'ckpt/{self.mname}_model.pt'
 
         use_cuda = torch.cuda.is_available()
@@ -76,21 +76,21 @@ def main(args):
     set_seed()
     config = Config(args)
     model = load_model(config)
-    tokenizer = load_tokenizer(config)
-
 
     if config.mode == 'train':
-        train_dataloader = load_dataloader(config, tokenizer, 'train')
-        valid_dataloader = load_dataloader(config, tokenizer, 'valid')
+        train_dataloader = load_dataloader(config, 'train')
+        valid_dataloader = load_dataloader(config, 'valid')
         trainer = Trainer(config, model, train_dataloader, valid_dataloader)
         trainer.train()
     
     elif config.mode == 'test':
-        test_dataloader = load_dataloader(config, tokenizer, 'test')
+        tokenizer = load_tokenizer(config)
+        test_dataloader = load_dataloader(config, 'test')
         tester = Tester(config, model, tokenizer, test_dataloader)
         tester.test()
     
     elif config.mode == 'inference':
+        tokenizer = load_tokenizer(config)
         generator = Generator(config, model, tokenizer)
         generator.inference()
     
@@ -99,17 +99,18 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-mode', required=True)
-    parser.add_argument('-model', required=True)
+    parser.add_argument('-arch', required=True)
+    parser.add_argument('-attn', required=True)
     parser.add_argument('-search', default='greedy', required=False)
     
     args = parser.parse_args()
     assert args.mode in ['train', 'test', 'inference']
     assert args.arch in ['standard', 'evolved']
-    assert args.attn in ['orig', 'lin_half', 'nolin_half', 'lin_full', 'nolin_full']
+    assert args.attn in ['orig', 'linear_half', 'nonlin_half', 'linear_full', 'nonlin_full']
     assert args.search in ['greedy', 'beam']
 
     if args.mode != 'train':
-        args.mname = f"{args.arch}_{args.attn}" if args.attn != 'orig'  else args.arch
-        assert os.path.exists(f'ckpt/{args.mname}_model.pt')
+        mname = f"{args.arch}_{args.attn}" if args.attn != 'orig'  else args.arch
+        assert os.path.exists(f'ckpt/{mname}_model.pt')
 
     main(args)

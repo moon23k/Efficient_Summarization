@@ -1,6 +1,5 @@
-import torch, evaluate
+import math, torch, evaluate
 import torch.nn as nn
-
 
 
 
@@ -10,34 +9,66 @@ class Tester:
         
         self.model = model
         self.tokenizer = tokenizer
-        self.device = config.device
         self.dataloader = test_dataloader
+
+        self.mname = config.mname
+        self.bos_id = config.bos_id
+        self.device = config.device
+        self.max_len = config.full_len
         self.metric_module = evaluate.load('rouge')
 
 
     def test(self):
+        score = 0.0
         self.model.eval()
-        tot_len, greedy_score, beam_score = 0, 0, 0
 
         with torch.no_grad():
-            for batch in tqdm(self.dataloader):
+            for batch in self.dataloader:
+                x = batch['x'].to(self.device)
+                y = self.tokenize(batch['y'])
 
-                greedy_pred = self.search.greedy_search()
-                beam_pred = self.search.beam_search()
+                pred = self.predict(x)
+                pred = self.tokenize(pred)
+                
+                score += self.evaluate(pred, y)
 
-                greedy_score += self.metric_score(greedy_pred, trg)
-                beam_score += self.metric_score(beam_pred, trg)                
+        txt = f"TEST Result on {self.mname.upper()} model"
+        txt += f"\n-- Score: {round(score/len(self.dataloader), 2)}\n"
+        print(txt)
+
+
+    def tokenize(self, batch):
+        return [self.tokenizer.decode(x) for x in batch.tolist()]
+
+
+    def predict(self, x):
+
+        batch_size = x.size(0)
+        pred = torch.zeros((batch_size, self.max_len))
+        pred = pred.type(torch.LongTensor).to(self.device)
+        pred[:, 0] = self.bos_id
+
+        e_mask = self.model.pad_mask(x)
+        memory = self.model.encoder(x, e_mask)
+
+        for idx in range(1, self.max_len):
+            y = pred[:, :idx]
+            d_out = self.model.decoder(y, memory, e_mask, None)
+
+            logit = self.model.generator(d_out)
+            pred[:, idx] = logit.argmax(dim=-1)[:, -1]
+
+        return pred
+
+
+
+    def evaluate(self, pred, label):
+        if all(elem == '' for elem in pred):
+            return 0.0
         
-        greedy_score = round(greedy_score/tot_len, 2)
-        beam_score = round(beam_score/tot_len, 2)
-        
-        return greedy_score, beam_score
+        score = self.metric_module.compute(
+            predictions=pred, 
+            references =[[l] for l in label]
+        )['rouge2']
 
-
-
-    def metric_score(self, pred, label):
-        pred = self.tokenizer.batch_decode(pred)
-        label = self.tokenizer.batch_decode(label.tolist())
-        score = self.metric_module.compute(pred, label)['rouge2']
-
-        return (score * 100)
+        return score * 100

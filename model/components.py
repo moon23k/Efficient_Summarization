@@ -32,7 +32,7 @@ class MultiHeadAttention(nn.Module):
                 nn.Linear(config.full_len, config.full_len // 2),
                 nn.Dropout(config.dropout_ratio)
             ]
-            if 'nolin' in self.attn:
+            if 'nonlin' in self.attn:
                 proj.insert(1, nn.GELU())
 
             self.projs = clones(nn.Sequential(*proj), 2)
